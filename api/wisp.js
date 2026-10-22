@@ -1,15 +1,11 @@
+import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { createServer } from 'http';
 
-const server = createServer();
+// Vercel requires an http.Server to manage the WebSocket upgrade lifecycle.
+const server = http.createServer();
 
-const wss = new WebSocketServer({ noServer: true });
-
-server.on('upgrade', (req, socket, head) => {
-  wss.handleUpgrade(req, socket, head, (ws) => {
-    wss.emit('connection', ws, req);
-  });
-});
+// Attach the WebSocket server directly to the HTTP server.
+const wss = new WebSocketServer({ server });
 
 wss.on('connection', (clientWs) => {
   // Your Cloudflare Worker URL
@@ -25,10 +21,10 @@ wss.on('connection', (clientWs) => {
 
   clientWs.on('close', () => workerWs.close());
   workerWs.on('close', () => clientWs.close());
-  
+
   clientWs.on('error', () => workerWs.close());
   workerWs.on('error', () => clientWs.close());
 });
 
-// Vercel requires an http.Server export to handle raw WebSocket upgrades
+// Export the server instance
 export default server;
