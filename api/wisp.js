@@ -1,28 +1,34 @@
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
+import { createServer } from 'http';
 
-export default function handler(req, res) {
-  if (req.headers.upgrade?.toLowerCase() !== 'websocket') {
-    return res.status(400).send('Expected WebSocket upgrade');
-  }
+const server = createServer();
 
-  const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true });
 
-  wss.handleUpgrade(req, req.socket, req.headers, (clientWs) => {
-    const workerWs = new WebSocket("wss://aged-rice-8680.dungeonscraft88.workers.dev/");
-
-    clientWs.on('message', (data) => {
-      if (workerWs.readyState === WebSocket.OPEN) workerWs.send(data);
-    });
-
-    workerWs.on('message', (data) => {
-      if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data);
-    });
-
-    clientWs.on('close', () => workerWs.close());
-    workerWs.on('close', () => clientWs.close());
+server.on('upgrade', (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req);
   });
-}
+});
 
-export const config = {
-  api: { bodyParser: false },
-};
+wss.on('connection', (clientWs) => {
+  // Your Cloudflare Worker URL
+  const workerWs = new WebSocket("wss://aged-rice-8680.dungeonscraft88.workers.dev/");
+
+  clientWs.on('message', (data) => {
+    if (workerWs.readyState === WebSocket.OPEN) workerWs.send(data);
+  });
+
+  workerWs.on('message', (data) => {
+    if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data);
+  });
+
+  clientWs.on('close', () => workerWs.close());
+  workerWs.on('close', () => clientWs.close());
+  
+  clientWs.on('error', () => workerWs.close());
+  workerWs.on('error', () => clientWs.close());
+});
+
+// Vercel requires an http.Server export to handle raw WebSocket upgrades
+export default server;
